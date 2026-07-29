@@ -1,0 +1,27 @@
+# The money path must be identical on every host — see "Money is integer cents".
+# wherever a fleet runs it. Running only one host would defeat that.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: com-prolific-app — JS and JVM must agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: DeLaGuardo/setup-clojure@13.0
+        with:
+          cli: latest
+      - name: Install nbb
+        run: npm install -g nbb@latest
+      - name: JS host (nbb)
+        run: npm test
+      - name: JVM host (clojure)
+        run: clojure -M:test

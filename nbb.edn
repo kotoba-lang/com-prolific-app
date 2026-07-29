@@ -1,0 +1,2 @@
+;; Classpath for nbb. Prefer `npm test` / `nbb -m …` over bb.edn.
+{:paths ["src" "test"]}
