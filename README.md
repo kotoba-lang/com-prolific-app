@@ -33,15 +33,125 @@ owns that identity.
 ## Layout
 
 ```
-src/prolific/core.cljc     pure: rewards, filters, study payload, triage
-src/prolific/client.cljs   HTTP: fetch/post against api.prolific.com
-test/prolific/core_test.cljc
+src/prolific/core.cljc      pure: rewards, filters, study payload, triage
+src/prolific/evidence.cljc  pure: did the write actually land?
+src/prolific/channel.cljc   pure: which automation channel may be used at all
+src/prolific/signup.cljc    pure: the researcher signup as steps and fields
+src/prolific/client.cljs    HTTP: fetch/post against api.prolific.com
+src/prolific/browser.cljs   CDP: drive a form through agent-browser
 ```
 
 The split is the point. Everything that decides **what a participant is paid**,
 **which population is recruited** and **which submissions get money** is pure
 and runs on both hosts with no network and no token. `client.cljs` only moves
 bytes.
+
+## Getting an account is part of the integration
+
+The API client above assumes a token, and a token assumes a researcher
+account. Registering one is a browser form, so the form is modelled here too —
+as data and as a verified driver, not as a runbook somebody follows by hand.
+
+### An actuator's return value is not evidence
+
+`evidence.cljc` exists because of three measured lies. Driving the signup form
+through desktop synthetic input on 2026-07-30 produced:
+
+```
+type   -> "Typed"               4 characters silently dropped
+key    -> "Pressed tab"         focus never moved, so the next value was
+                                concatenated onto the previous field
+resize -> "after=622,-1049,…"   the window had not moved one pixel; the tool
+                                echoed back the bounds it was asked for
+```
+
+Each was indistinguishable from success at the call site. Only reading the
+target's own state back afterwards caught them. So `verdict` takes intent,
+the value **before** acting, and the value read back after — and every verdict
+carries its own repair, because picking the wrong repair is how the form got
+worse instead of better:
+
+| verdict | means | repair |
+|---|---|---|
+| `:match` | read-back equals intent | — |
+| `:unchanged` | actuator claimed success, value did not move | **change channel** — retrying is superstition |
+| `:truncated` | observed is a prefix of intent | refill **whole**, never append the tail |
+| `:appended` | intent landed on top of the old value | clear, then refill |
+| `:absent` | no such field | re-snapshot |
+| `:mismatch` | none of the above | halt |
+
+The `:truncated` row is the one that cost real damage: typing the missing
+suffix is the obvious repair and it corrupted the field a second time.
+
+### A channel that cannot be verified is refused
+
+`channel.cljc` decides this **before** touching a form, which is the check
+whose absence produced a half-filled one. Three channels were unavailable that
+day and each was discovered a field at a time:
+
+- **accessibility** — Chrome's web content was an `AXGroup` 500x547 with zero
+  children (renderer accessibility is off by default), so no field could be
+  addressed by label
+- **coordinate** — the window sat on a second display at `y=-1049` while the
+  click space was the primary display only
+- **keystroke** — the only one left, and structurally unverifiable: it cannot
+  read a field back, so it can never produce the evidence above
+
+There is deliberately no fallback. Refusing stops the run with the form
+untouched, which is strictly better than the half-filled form best-effort
+actually produced.
+
+### Choosing CDP removes two failure modes outright
+
+`browser.cljs` drives the form through [`agent-browser`](https://agent-browser.dev)
+over the Chrome DevTools Protocol. `fill` clears and writes atomically and
+`get value` reads back, so `:truncated` and `:appended` cannot occur — measured
+against the same strings that had just failed:
+
+```
+fill "Research Operations"        -> read back "Research Operations"
+fill "User Research" over it      -> read back "User Research"
+```
+
+It also reads a `<select>`'s real options, which is what the desktop channel
+could not do at all — the run stalled on **Sector** because the option list was
+unreadable. `select-verified!` resolves a visible label to the underlying
+option value and reports the available labels when one does not match.
+
+```sh
+nbb -m prolific.browser profile.edn professional-profile
+# channel: cdp
+# coverage: 5/11 fields fillable now; closable gaps [:country-of-residence]
+# step professional-profile — Tell us about your work
+#   match  sector             "industry"
+#   match  organization-name  "AWAI Network, L.L.C."
+#   match  job-role           "Research Operations"
+#   match  department         "User Research"
+```
+
+### Four reasons a human is needed, not one
+
+`signup.cljc` splits the blocked fields, because lumping them together hides
+the only distinction worth acting on:
+
+```
+:human/credential    passwords              permanent boundary
+:human/captcha       bot-detection          permanent boundary
+:human/consent       terms, marketing,      permanent boundary — a consent is
+                     cookie banners         given by a person
+:human/unknown-fact  country of residence   NOT a boundary: nobody had stated
+                                            the value, and it becomes
+                                            machine-fillable once configured
+```
+
+Conflating the fourth with the first three makes a runner look permanently 60%
+manual when it is 80% automatable with two more lines of config. `gaps` reports
+that split and `coverage` reports the keys that would close it, so the number
+is actionable rather than decorative.
+
+`browser.cljs` has **no function that clicks Continue, Next or Submit**, and
+that is not an omission — advancing the signup is what creates the account.
+It fills the step in front of it and stops.
 
 ## Money is integer cents
 
@@ -107,9 +217,24 @@ npm test          # nbb / JS host
 clojure -M:test   # JVM host — must agree exactly
 ```
 
+53 tests, 160 assertions, both hosts. The signup and evidence tests carry the
+real strings from the failed run, so a regression reads as the original bug.
+
+`browser.cljs` is nbb-only and not in the suite; it was exercised against a
+fixture form, including the paths that matter — an absent label, an unmatched
+`<select>` option, and the refusal, which exits 1 without touching the page.
+
 ## Status
 
 Scaffolded 2026-07-28. **The client has never been run against the live API** —
 every test here uses fixtures shaped like the documented responses. Before
 trusting it with money, confirm the real filter ids with
 `GET /filters/` and compare against `filters-fixture` in the test.
+
+The signup model is transcribed from a real traversal on 2026-07-30 that
+reached the third step. **The `:credentials` step was never seen** — its fields
+are the three that must be human anyway, so they are modelled from the
+boundary rather than from observation, and the step's field labels may be
+wrong. `agent-browser` launches its own Chrome and therefore cannot resume a
+signup started in the user's logged-in profile; that is what the `:extension`
+channel is for.

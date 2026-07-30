@@ -1,0 +1,126 @@
+(ns prolific.signup-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [prolific.signup :as s]))
+
+(def awai
+  "The profile that was actually being registered."
+  {:email "ryo@awai.network"
+   :organization-name "AWAI Network, L.L.C."
+   :job-role "Research Operations"
+   :department "User Research"
+   :sector "Industry"})
+
+(defn- of-step [profile step-id]
+  (first (filter #(= step-id (:step %)) (s/plan profile))))
+
+(deftest an-empty-profile-fills-nothing-and-invents-nothing
+  (let [p (s/plan {})]
+    (is (every? (comp empty? :fill) p)
+        "a machine field with no configured value must never be guessed")))
+
+(deftest a-machine-field-with-no-value-is-a-gap-not-a-boundary
+  (let [{:keys [boundary closable]} (s/gaps {})]
+    (is (some #(= :organization-name (:field %)) closable))
+    (is (not-any? #(= :organization-name (:field %)) boundary))
+    (is (every? #(= :human/unknown-fact (:reason %)) closable))))
+
+(deftest the-three-permanent-boundaries-never-move
+  (testing "no profile value can make these machine-fillable"
+    (let [rich (merge awai {:password "x" :terms true :captcha "y"
+                            :country-of-residence "United States"})
+          {:keys [boundary closable]} (s/gaps rich)
+          ids (set (map :field boundary))]
+      (is (contains? ids :password))
+      (is (contains? ids :terms))
+      (is (contains? ids :captcha))
+      (is (empty? closable) "everything else is closable by config"))))
+
+(deftest a-password-is-blocked-as-a-credential-not-as-unknown
+  (let [b (:blocked (of-step awai :credentials))
+        by-field (into {} (map (juxt :field identity) b))]
+    (is (= :human/credential (:reason (:password by-field))))
+    (is (= :human/captcha (:reason (:captcha by-field))))
+    (is (= :human/consent (:reason (:terms by-field))))))
+
+(deftest residence-is-not-inferred-from-the-companys-jurisdiction
+  (testing "a Delaware LLC does not tell you where its holder lives, and the
+            answer has tax and jurisdiction consequences"
+    (let [b (:blocked (of-step awai :country))]
+      (is (= [:country-of-residence] (mapv :field b)))
+      (is (= :human/unknown-fact (:reason (first b))))
+      (is (re-find #"not the company" (:because (first b)))))))
+
+(deftest stating-the-residence-closes-that-gap
+  (let [p (of-step (assoc awai :country-of-residence "United States") :country)]
+    (is (empty? (:blocked p)))
+    (is (= ["United States"] (mapv :value (:fill p))))))
+
+(deftest the-work-step-fills-all-four-fields
+  (let [p (of-step awai :professional-profile)]
+    (is (empty? (:blocked p)))
+    (is (= #{:sector :organization-name :job-role :department}
+           (set (map :field (:fill p)))))
+    (is (= "AWAI Network, L.L.C."
+           (:value (first (filter #(= :organization-name (:field %)) (:fill p))))))))
+
+(deftest the-marketing-opt-in-defaults-to-unchecked
+  (testing "declining non-essential collection needs no human decision"
+    (let [b (:blocked (of-step awai :email))
+          m (first (filter #(= :marketing-opt-in (:field %)) b))]
+      (is (= :unchecked (:default m))))))
+
+(deftest the-privacy-banner-recommends-declining
+  (let [b (:blocked (of-step awai :email))
+        p (first (filter #(= :privacy-banner (:field %)) b))]
+    (is (re-find #"(?i)decline" (:recommend p)))))
+
+(deftest coverage-reports-the-gap-keys-so-the-number-is-actionable
+  (let [c (s/coverage awai)]
+    (is (= [:country-of-residence] (:closable-gaps c)))
+    (is (pos? (:machine-filled c)))))
+
+(deftest the-boundary-count-includes-both-consent-surfaces
+  (testing "the marketing opt-in and the privacy banner are consents too, so
+            there are five permanent boundaries and not the three of the
+            credentials step"
+    (is (= #{:marketing-opt-in :privacy-banner :password :terms :captcha}
+           (set (map :field (:boundary (s/gaps awai))))))
+    (is (= 5 (:permanent-boundaries (s/coverage awai))))))
+
+(deftest coverage-is-integer-so-both-hosts-agree
+  (testing "same reason the money path is integer cents"
+    (doseq [p [awai {} {:password "x"} (assoc awai :country-of-residence "Other")]]
+      (is (integer? (:automatable-permille (s/coverage p))) (pr-str p)))))
+
+(deftest the-metric-counts-what-config-can-reach
+  (testing "an unconfigured profile still reports its potential — the number
+            answers 'how automatable is this flow', not 'how much did we
+            configure', which is what makes a shrinking gap list progress"
+    (let [c (s/coverage {})]
+      (is (pos? (:automatable-permille c)))
+      (is (zero? (:machine-filled c)))
+      (is (= (:automatable-permille c)
+             (quot (* 1000 (+ (:machine-filled c) (count (:closable-gaps c))))
+                   (:fields c)))))))
+
+(deftest closing-the-last-gap-raises-coverage
+  (let [before (:automatable-permille (s/coverage awai))
+        after (:automatable-permille
+               (s/coverage (assoc awai :country-of-residence "Other")))]
+    (is (= before after)
+        "a closable gap already counts as automatable — the metric tracks
+         what config can reach, not what is configured today")
+    (is (< (:machine-filled (s/coverage awai))
+           (:machine-filled (s/coverage (assoc awai :country-of-residence "Other")))))))
+
+(deftest every-step-declares-a-marker-except-the-last
+  (testing "navigation evidence needs text only the next screen renders"
+    (let [ms (mapv :step/marker s/steps)]
+      (is (every? some? (butlast ms)))
+      (is (nil? (last ms)) "nothing follows the credentials step"))))
+
+(deftest the-plan-is-inert
+  (testing "plan returns data; the signup route is a single URL that advances
+            by fragment, so nothing here may assume a navigation happened"
+    (is (vector? (s/plan awai)))
+    (is (= (s/plan awai) (s/plan awai)))))
