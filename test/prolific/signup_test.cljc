@@ -29,7 +29,8 @@
             named :password or :captcha must not be mistaken for permission"
     (let [rich (merge awai {:password "x" :terms true :captcha "y"
                             :country-of-residence "United States"
-                            :sector "Industry"})
+                            :sector "Industry"
+                            :first-name "Ryo" :last-name "Awai"})
           {:keys [boundary closable]} (s/gaps rich)
           ids (set (map :field boundary))]
       (is (contains? ids :password))
@@ -97,6 +98,23 @@
     (is (= "AWAI Network, L.L.C."
            (:value (first (filter #(= :organization-name (:field %)) (:fill p))))))))
 
+(deftest a-typeahead-field-carries-its-commit-step
+  (testing "observed live: writing a value absent from the suggestion list
+            leaves the field uncommitted, and on blur the widget substituted
+            its own nearest suggestion — 'Research Operations' became 'User
+            Researcher' AFTER the write had been verified :match"
+    (let [p (of-step awai :professional-profile)
+          by-field (into {} (map (juxt :field identity) (:fill p)))]
+      (is (= :typeahead (:commit (:job-role by-field))))
+      (is (= :typeahead (:commit (:department by-field)))))))
+
+(deftest a-plain-text-field-has-no-commit-step
+  (testing "the commit exists to name a widget's own escape hatch, not as a
+            blanket extra click on every field"
+    (let [p (of-step awai :email)
+          email (first (filter #(= :email (:field %)) (:fill p)))]
+      (is (nil? (:commit email))))))
+
 (deftest the-marketing-opt-in-defaults-to-unchecked
   (testing "declining non-essential collection needs no human decision"
     (let [b (:blocked (of-step awai :email))
@@ -109,9 +127,23 @@
     (is (re-find #"(?i)decline" (:recommend p)))))
 
 (deftest coverage-reports-the-gap-keys-so-the-number-is-actionable
-  (let [c (s/coverage awai)]
-    (is (= [:country-of-residence] (:closable-gaps c)))
-    (is (pos? (:machine-filled c)))))
+  (testing "every gap is named by the profile key that would close it, so the
+            report says what to write rather than how far short it fell"
+    (let [c (s/coverage awai)]
+      (is (= [:country-of-residence :first-name :last-name] (:closable-gaps c)))
+      (is (pos? (:machine-filled c))))))
+
+(deftest the-name-step-is-part-of-the-flow
+  (testing "found only by advancing — the model transcribed on the first
+            traversal went straight from professional-profile to credentials,
+            and the marker check caught the discrepancy (moved? true,
+            marked? false) instead of writing a first name into a password"
+    (is (= [:email :country :professional-profile :name :credentials]
+           (mapv :step/id s/steps)))
+    (is (= #{:first-name :last-name}
+           (set (map :field (:fill (of-step (assoc awai :first-name "Ryo"
+                                                   :last-name "Awai")
+                                            :name))))))))
 
 (deftest the-boundary-count-includes-both-consent-surfaces
   (testing "the marketing opt-in and the privacy banner are consents too, so

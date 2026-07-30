@@ -105,15 +105,47 @@
       :field/kind :text
       :field/profile-key :organization-name
       :field/actor :machine}
+     ;; A typeahead, not a plain text box. Writing a value that is not in its
+     ;; suggestion list leaves the field in an uncommitted state, and on blur
+     ;; it substituted its own nearest suggestion: "Research Operations"
+     ;; became "User Researcher" AFTER the write had been verified :match.
+     ;; The widget offers its own escape — a "Press Enter to use <text>"
+     ;; control — so :commit names it. Clicking that control is used rather
+     ;; than pressing Enter, which in a form can submit it.
      {:field/id :job-role
       :field/label "Job Role"
       :field/kind :text
+      :field/commit :typeahead
       :field/profile-key :job-role
       :field/actor :machine}
      {:field/id :department
       :field/label "Department"
       :field/kind :text
+      :field/commit :typeahead
       :field/profile-key :department
+      :field/actor :machine}]}
+
+   ;; Discovered only by advancing: the flow is email -> country ->
+   ;; professional_profile -> name -> credentials, and this step was absent
+   ;; from the model transcribed on the first traversal. The marker check is
+   ;; what surfaced it — advancing from :professional-profile reported
+   ;; `moved? true marked? false`, i.e. the page went somewhere that was not
+   ;; the screen the model predicted. A weaker check (URL only) would have
+   ;; called it success and the next step would have written a first name into
+   ;; a password field.
+   {:step/id :name
+    :step/heading "What should we call you?"
+    :step/marker "password"
+    :step/fields
+    [{:field/id :first-name
+      :field/label "First name"
+      :field/kind :text
+      :field/profile-key :first-name
+      :field/actor :machine}
+     {:field/id :last-name
+      :field/label "Last name"
+      :field/kind :text
+      :field/profile-key :last-name
       :field/actor :machine}]}
 
    ;; Never reached. The terms live on the :email step (see
@@ -179,6 +211,7 @@
       {:field id :action :fill
        :label (:field/label field)
        :kind (:field/kind field)
+       :commit (:field/commit field)
        :value value})))
 
 (defn plan
