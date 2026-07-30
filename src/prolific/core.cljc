@@ -83,17 +83,61 @@
 (defn- filter-text [flt]
   (str/lower-case (str (:title flt) " " (:question flt) " " (:description flt))))
 
-(defn language-filter
-  "The 'fluent languages' filter, falling back to any language filter.
+(def preferred-language-filter-ids
+  "Tried in order, by exact `filter_id`.
 
-  Fluency, not first language: what decides whether someone can do the task
-  is whether they can read the screen, not what they grew up speaking."
+  Fluency first, then first/primary language: what decides whether someone can
+  do the task is whether they can read the screen, not what they grew up
+  speaking."
+  ["fluent-languages" "first-language" "primary-language"])
+
+(def ^:private language-probe
+  #{"english" "spanish" "french" "arabic" "chinese" "german" "portuguese"})
+
+(defn language-choices?
+  "Does this filter's choice list consist OF languages?
+
+  The discriminator is structural rather than a name guess: a language filter
+  offers languages as its options. Two exact label hits from the probe set is
+  enough to tell one from a filter that merely mentions languages in its
+  question."
+  [flt]
+  (>= (count (for [[_ label] (:choices flt)
+                   :when (contains? language-probe
+                                    (str/lower-case (str/trim (str label))))]
+               label))
+      2))
+
+(defn language-filter
+  "The filter whose choices are languages, preferring fluency.
+
+  Chosen by exact `filter_id` first, because the text heuristic that used to
+  do this job picked the wrong filter against the live API — a defect no
+  fixture could show, since the fixture had four filters and the account has
+  491.
+
+  It scanned title/question/description for \"language\" and then for
+  \"fluent\", and `english-speaking-monolingual` (index 303) matched both: its
+  question reads \"are you fluent only in English?\". `fluent-languages` sits
+  at index 388 and was never reached. The chosen filter's options are
+  monolingualism categories — \"I only know English\", \"I know one other
+  language…\" — so no language matched and `resolve-languages` returned
+  `:unmatched` for all five requested languages.
+
+  The invariant held: an unmatched language is reported, never dropped, so
+  this surfaced as a refusal rather than as a study recruiting the wrong
+  population. But live language resolution did not work at all.
+
+  The text heuristic survives as a last resort, now gated on
+  `language-choices?` so a filter that only talks about languages cannot win
+  again."
   [filters]
-  (let [langish (filter #(and (= "select" (:type %))
-                              (str/includes? (filter-text %) "language"))
-                        filters)]
-    (or (first (filter #(str/includes? (filter-text %) "fluent") langish))
-        (first langish))))
+  (let [by-id (into {} (map (juxt :filter_id identity)) filters)]
+    (or (some by-id preferred-language-filter-ids)
+        (first (filter #(and (= "select" (:type %))
+                             (str/includes? (filter-text %) "language")
+                             (language-choices? %))
+                       filters)))))
 
 (defn match-languages
   "{requested [[choice-id label] …]}. Substring matching on purpose: a pool

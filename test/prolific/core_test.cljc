@@ -1,5 +1,6 @@
 (ns prolific.core-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [prolific.core :as core]))
 
 ;; A filter list shaped like a real GET /filters/ response: opaque numeric
@@ -55,6 +56,59 @@
   (testing "range filters and non-language selects are ignored"
     (is (not= "age" (:filter_id (core/language-filter filters-fixture))))
     (is (not= "handedness" (:filter_id (core/language-filter filters-fixture))))))
+
+;; ---------------------------------------------------------------------------
+;; The live account has 491 filters and the fixture has four, which is why the
+;; old text heuristic passed here and failed there. These pin the real shapes.
+;; ---------------------------------------------------------------------------
+
+(def monolingual-decoy
+  "Verbatim from the live API. Its question contains both \"language\" and
+  \"fluent\", so the heuristic that scanned text picked it over
+  fluent-languages — which sits 85 entries later in the response."
+  {:filter_id "english-speaking-monolingual"
+   :title "English speaking Monolingual"
+   :question "Are you an English-speaking monolingual, that is, are you fluent only in English? Or are you also fluent in another language?"
+   :type "select"
+   :choices {:0 "I only know English"
+             :1 "I know one other language in addition to English"
+             :2 "I know 2 or more languages in addition to English"
+             :3 "N/A or Rather not say"}})
+
+(deftest a-filter-that-only-mentions-languages-is-not-a-language-filter
+  (testing "its options are monolingualism categories, not languages"
+    (is (false? (core/language-choices? monolingual-decoy)))
+    (is (true? (core/language-choices?
+                (first (filter #(= "fluent-languages" (:filter_id %))
+                               filters-fixture)))))))
+
+(deftest the-decoy-does-not-win-even-when-it-comes-first
+  (testing "measured against the live account: the decoy is at index 303 and
+            fluent-languages at 388, so ordering decided the outcome"
+    (let [live-ish (into [monolingual-decoy] filters-fixture)]
+      (is (= "fluent-languages" (:filter_id (core/language-filter live-ish)))))))
+
+(deftest the-five-languages-this-fleet-recruits-resolve
+  (testing "English, Hindi, Chinese, Spanish and Arabic — the requested pool.
+            Against the live API these return ids 19/31/13/60/4 on fluent-languages."
+    (let [r (core/resolve-languages (into [monolingual-decoy] filters-fixture)
+                                    ["English" "Hindi" "Chinese" "Spanish" "Arabic"])]
+      (is (nil? (:error r)))
+      (is (= "fluent-languages" (:filter_id r)))
+      (testing "every requested language is represented — asserting a label
+                COUNT of 5 was wrong here, because the fixture splits Chinese
+                into Mandarin and Cantonese and correctly recruits both. The
+                live filter has a single Chinese choice, so the count differs
+                between the two and only coverage is the invariant."
+        (doseq [want ["English" "Hindi" "Chinese" "Spanish" "Arabic"]]
+          (is (some #(str/includes? % want) (:labels r)) want))))))
+
+(deftest selection-is-by-exact-id-not-by-position
+  (testing "shuffling the list must not change which filter is chosen"
+    (let [fs (into [monolingual-decoy] filters-fixture)]
+      (is (= "fluent-languages"
+             (:filter_id (core/language-filter (reverse fs)))
+             (:filter_id (core/language-filter fs)))))))
 
 (deftest one-request-can-match-several-choices
   (let [r (core/resolve-languages filters-fixture ["English" "Chinese"])]
