@@ -24,23 +24,57 @@
     (is (not-any? #(= :organization-name (:field %)) boundary))
     (is (every? #(= :human/unknown-fact (:reason %)) closable))))
 
-(deftest the-three-permanent-boundaries-never-move
-  (testing "no profile value can make these machine-fillable"
+(deftest the-permanent-boundaries-never-move
+  (testing "no profile value can make these machine-fillable — supplying one
+            named :password or :captcha must not be mistaken for permission"
     (let [rich (merge awai {:password "x" :terms true :captcha "y"
-                            :country-of-residence "United States"})
+                            :country-of-residence "United States"
+                            :sector "Industry"})
           {:keys [boundary closable]} (s/gaps rich)
           ids (set (map :field boundary))]
       (is (contains? ids :password))
-      (is (contains? ids :terms))
       (is (contains? ids :captcha))
-      (is (empty? closable) "everything else is closable by config"))))
+      (is (empty? closable) "everything else is closable by config")))
+  (testing "and a profile key cannot open the consent gate either"
+    (is (false? (s/may-advance? :email)))))
 
 (deftest a-password-is-blocked-as-a-credential-not-as-unknown
   (let [b (:blocked (of-step awai :credentials))
         by-field (into {} (map (juxt :field identity) b))]
     (is (= :human/credential (:reason (:password by-field))))
-    (is (= :human/captcha (:reason (:captcha by-field))))
-    (is (= :human/consent (:reason (:terms by-field))))))
+    (is (= :human/captcha (:reason (:captcha by-field))))))
+
+;; --------------------------------------------------------- consent gates
+
+(deftest the-email-step-may-not-be-advanced-by-a-machine
+  (testing "observed live 2026-07-30: there is NO terms checkbox — the text
+            'I agree to Prolific's Researcher Terms' sits directly above the
+            Next button, so pressing Next is the act of agreeing"
+    (is (false? (s/may-advance? :email)))
+    (is (= [:email] (mapv :step (s/consent-gates))))
+    (is (= :terms (:commits (first (s/consent-gates)))))))
+
+(deftest steps-with-no-consent-in-their-transition-may-be-advanced
+  (is (s/may-advance? :country))
+  (is (s/may-advance? :professional-profile)))
+
+(deftest a-consent-gate-is-not-reported-as-a-missing-value
+  (testing "a gate is a transition only a person may make, not a field
+            somebody forgot to configure — conflating them would put 'terms'
+            on the list of gaps that config can close"
+    (let [{:keys [closable]} (s/gaps awai)]
+      (is (not-any? #(= :terms (:field %)) closable)))))
+
+(deftest the-terms-checkbox-no-longer-exists-in-the-model
+  (testing "modelling it as a checkbox is what makes a runner conclude there
+            is no consent on the step and press Next"
+    (is (not-any? #(= :terms (:field/id %))
+                  (mapcat :step/fields s/steps)))))
+
+(deftest the-unreached-step-says-so
+  (testing "its labels are modelled from the boundary, not observed"
+    (let [cred (first (filter #(= :credentials (:step/id %)) s/steps))]
+      (is (false? (:step/observed? cred))))))
 
 (deftest residence-is-not-inferred-from-the-companys-jurisdiction
   (testing "a Delaware LLC does not tell you where its holder lives, and the
@@ -81,11 +115,16 @@
 
 (deftest the-boundary-count-includes-both-consent-surfaces
   (testing "the marketing opt-in and the privacy banner are consents too, so
-            there are five permanent boundaries and not the three of the
-            credentials step"
-    (is (= #{:marketing-opt-in :privacy-banner :password :terms :captcha}
+            the boundaries are not just the credentials step's two"
+    (is (= #{:marketing-opt-in :privacy-banner :password :captcha}
            (set (map :field (:boundary (s/gaps awai))))))
-    (is (= 5 (:permanent-boundaries (s/coverage awai))))))
+    (is (= 4 (:permanent-boundaries (s/coverage awai))))))
+
+(deftest the-total-human-surface-is-fields-plus-gates
+  (testing "counting only fields undercounts: the Researcher Terms are a gate
+            on the email transition and appear in no field list at all"
+    (is (= 5 (+ (:permanent-boundaries (s/coverage awai))
+                (count (s/consent-gates)))))))
 
 (deftest coverage-is-integer-so-both-hosts-agree
   (testing "same reason the money path is integer cents"

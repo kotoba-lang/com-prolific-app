@@ -36,10 +36,22 @@
 
 (def steps
   "Ordered. `:step/marker` is text that only the NEXT screen renders, used
-  as the second half of navigation evidence."
+  as the second half of navigation evidence.
+
+  `:step/advance-is-consent` marks a step whose NEXT BUTTON IS ITSELF the
+  agreement. Observed on the live form 2026-07-30: the email step has no
+  terms checkbox at all — the text \"I agree to Prolific's Researcher Terms\"
+  sits directly above the Next button, so pressing Next is the act of
+  agreeing. A runner looking for a checkbox to leave alone finds none,
+  concludes there is no consent on this step, and enters a binding contract
+  by pressing what looks like navigation.
+
+  This is why consent cannot be modelled as a field type. It is a property
+  of the transition."
   [{:step/id :email
     :step/heading "What's your organization email?"
     :step/marker "country of residence"
+    :step/advance-is-consent :terms
     :step/fields
     [{:field/id :email
       :field/label "Email"
@@ -104,25 +116,41 @@
       :field/profile-key :department
       :field/actor :machine}]}
 
+   ;; Never reached. The terms live on the :email step (see
+   ;; :step/advance-is-consent), so this step's contents are modelled from the
+   ;; boundary rather than from observation and its labels may be wrong.
    {:step/id :credentials
     :step/heading "Create a password"
     :step/marker nil
+    :step/observed? false
     :step/fields
     [{:field/id :password
       :field/label "Password"
       :field/kind :password
       :field/actor :human
       :field/reason :human/credential}
-     {:field/id :terms
-      :field/label "I agree to the terms of service"
-      :field/kind :checkbox
-      :field/actor :human
-      :field/reason :human/consent}
      {:field/id :captcha
       :field/label "reCAPTCHA"
       :field/kind :captcha
       :field/actor :human
       :field/reason :human/captcha}]}])
+
+(defn consent-gates
+  "Steps a machine must not advance, and what agreeing would commit to.
+
+  Separate from `gaps` on purpose: a consent gate is not a missing value, it
+  is a transition that only a person may make. A caller drives the fields of
+  such a step and then stops."
+  []
+  (vec (for [s steps :when (:step/advance-is-consent s)]
+         {:step (:step/id s)
+          :commits (:step/advance-is-consent s)
+          :note "the Next button is the agreement; there is no checkbox"})))
+
+(defn may-advance?
+  "May a machine press this step's Next button?"
+  [step-id]
+  (not-any? #(= step-id (:step %)) (consent-gates)))
 
 (defn- blank? [v]
   (or (nil? v) (and (string? v) (str/blank? v))))
