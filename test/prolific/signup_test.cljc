@@ -1,5 +1,6 @@
 (ns prolific.signup-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [prolific.signup :as s]))
 
 (def awai
@@ -183,6 +184,23 @@
          what config can reach, not what is configured today")
     (is (< (:machine-filled (s/coverage awai))
            (:machine-filled (s/coverage (assoc awai :country-of-residence "Other")))))))
+
+(deftest each-marker-matches-the-heading-of-the-step-that-follows
+  (testing "a marker names the NEXT screen, so it is the one field in a step
+            that is not local to that step — inserting :name silently
+            invalidated the marker of the step before it, and the live run
+            reported `moved? true marked? false` a second time. Checked
+            mechanically because the coupling is invisible when reading one
+            step at a time."
+    (doseq [[a b] (partition 2 1 s/steps)]
+      (let [marker (:step/marker a)
+            heading (:step/heading b)]
+        (is (some? marker) (str (:step/id a) " must predict " (:step/id b)))
+        (is (str/includes? (str/lower-case heading)
+                           (str/lower-case marker))
+            (str (:step/id a) "'s marker " (pr-str marker)
+                 " does not appear in " (:step/id b) "'s heading "
+                 (pr-str heading)))))))
 
 (deftest every-step-declares-a-marker-except-the-last
   (testing "navigation evidence needs text only the next screen renders"

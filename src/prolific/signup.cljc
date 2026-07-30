@@ -93,7 +93,17 @@
 
    {:step/id :professional-profile
     :step/heading "Tell us about your work"
-    :step/marker "password"
+    ;; Was "password", left stale when the :name step was discovered and
+    ;; inserted after this one. Inserting a step invalidates the marker of the
+    ;; step BEFORE it, and only that one — a marker names the next screen, so
+    ;; it is the one field here that is not local to its own step.
+    ;;
+    ;; The check caught it twice rather than once: the first traversal reported
+    ;; `moved? true marked? false` and led to finding :name, and the second
+    ;; reported it again because fixing the model meant adding the step, not
+    ;; correcting the pointer. Worth keeping as a reminder that this field
+    ;; couples adjacent steps.
+    :step/marker "What should we call you"
     :step/fields
     [{:field/id :sector
       :field/label "Sector"
