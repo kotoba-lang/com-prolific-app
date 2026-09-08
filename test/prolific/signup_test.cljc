@@ -1,5 +1,5 @@
 (ns prolific.signup-test
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is testing]]
             [prolific.signup :as s]))
 
@@ -196,8 +196,8 @@
       (let [marker (:step/marker a)
             heading (:step/heading b)]
         (is (some? marker) (str (:step/id a) " must predict " (:step/id b)))
-        (is (str/includes? (str/lower-case heading)
-                           (str/lower-case marker))
+        (is (str/includes? (str/lower heading)
+                           (str/lower marker))
             (str (:step/id a) "'s marker " (pr-str marker)
                  " does not appear in " (:step/id b) "'s heading "
                  (pr-str heading)))))))
