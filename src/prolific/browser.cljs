@@ -38,7 +38,7 @@
   (:require ["node:child_process" :as cp]
             ["node:fs" :as fs]
             [clojure.edn :as edn]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [prolific.channel :as channel]
             [prolific.evidence :as ev]
             [prolific.signup :as signup]))
@@ -99,8 +99,8 @@
    (let [candidates (cond->> (seq refs)
                       role (filter #(= role (:role (val %)))))
          exact (filter #(= name (:name (val %))) candidates)
-         fuzzy (filter #(str/includes? (str/lower-case (str (:name (val %))))
-                                       (str/lower-case (str name)))
+         fuzzy (filter #(str/includes? (str/lower (str (:name (val %))))
+                                       (str/lower (str name)))
                        candidates)
          pick (cond
                 (= 1 (count exact)) (first exact)
