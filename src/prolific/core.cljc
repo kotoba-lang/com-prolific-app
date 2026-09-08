@@ -7,7 +7,7 @@
   parts worth getting right (what a participant is paid, which population is
   recruited, which submissions get money) are the parts you want to test
   without a network or a token."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 ;; ---------------------------------------------------------------- rewards
 
@@ -81,7 +81,7 @@
 ;; population the day Prolific renumbers a choice list.
 
 (defn- filter-text [flt]
-  (str/lower-case (str (:title flt) " " (:question flt) " " (:description flt))))
+  (str/lower (str (:title flt) " " (:question flt) " " (:description flt))))
 
 (def preferred-language-filter-ids
   "Tried in order, by exact `filter_id`.
@@ -104,7 +104,7 @@
   [flt]
   (>= (count (for [[_ label] (:choices flt)
                    :when (contains? language-probe
-                                    (str/lower-case (str/trim (str label))))]
+                                    (str/lower (str/trim (str label))))]
                label))
       2))
 
@@ -147,8 +147,8 @@
   (into {}
         (for [w wanted]
           [w (vec (for [[cid label] (:choices flt)
-                        :when (str/includes? (str/lower-case (str label))
-                                             (str/lower-case w))]
+                        :when (str/includes? (str/lower (str label))
+                                             (str/lower w))]
                     [(name cid) (str label)]))])))
 
 (defn resolve-languages
@@ -174,8 +174,8 @@
   "Does the resolved pool include a reader of `language`? Used to refuse
   recruiting people who cannot read the surface they are being sent to."
   [labels language]
-  (boolean (some #(str/includes? (str/lower-case (str %))
-                                 (str/lower-case language))
+  (boolean (some #(str/includes? (str/lower (str %))
+                                 (str/lower language))
                  labels)))
 
 ;; ------------------------------------------------------------------ study

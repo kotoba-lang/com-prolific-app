@@ -28,7 +28,7 @@
   with two more lines of config. `gaps` reports exactly that difference.
 
   Pure: takes a profile map, returns a plan."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def boundary-reasons
   "Reasons that no amount of configuration will lift."

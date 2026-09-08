@@ -21,7 +21,7 @@
   that a best-effort attempt actually produced.
 
   Pure: takes observed capabilities, returns a decision."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def channels
   "Ordered best-first. `reads-back?` is the gate: it is what makes a write

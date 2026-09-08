@@ -22,7 +22,7 @@
   and typing the suffix is exactly what corrupted it a second time.
 
   Pure: takes three strings, returns data."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def verdicts
   "Every outcome a verified write can have, with the repair it calls for.
@@ -120,8 +120,8 @@
   (let [moved? (and url-after (not= url-before url-after))
         marked? (boolean
                  (and expect-marker text-after
-                      (str/includes? (str/lower-case (str text-after))
-                                     (str/lower-case (str expect-marker)))))]
+                      (str/includes? (str/lower (str text-after))
+                                     (str/lower (str expect-marker)))))]
     {:ok? (and moved? marked?)
      :moved? moved?
      :marked? marked?
