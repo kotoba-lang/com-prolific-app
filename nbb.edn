@@ -1,2 +1,2 @@
-;; Classpath for nbb. Prefer `npm test` / `nbb -m …` over bb.edn.
+;; Classpath for nbb. Prefer `npm test` / `kbb --backend sci -m …` over bb.edn.
 {:paths ["src" "test"]}

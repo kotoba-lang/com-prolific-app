@@ -119,7 +119,7 @@ unreadable. `select-verified!` resolves a visible label to the underlying
 option value and reports the available labels when one does not match.
 
 ```sh
-nbb -m prolific.browser profile.edn professional-profile
+kbb --backend sci -m prolific.browser profile.edn professional-profile
 # channel: cdp
 # coverage: 5/11 fields fillable now; closable gaps [:country-of-residence]
 # step professional-profile — Tell us about your work
@@ -214,7 +214,7 @@ not exist and which the first draft of the caller used.
 
 ```sh
 npm test          # nbb / JS host
-clojure -M:test   # JVM host — must agree exactly
+kbb -M:test   # JVM host — must agree exactly
 ```
 
 53 tests, 160 assertions, both hosts. The signup and evidence tests carry the
