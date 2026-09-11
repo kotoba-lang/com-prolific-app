@@ -437,7 +437,7 @@
         (recur more (assoc acc key v))))))
 
 (defn -main
-  "nbb -m prolific.browser <profile.edn> <step-id> [--url U]
+  "kbb --backend sci -m prolific.browser <profile.edn> <step-id> [--url U]
                            [--consent GATE --authorized-by WHO]
 
   Fills the step. With --consent it also advances it, which for a gated step
@@ -449,7 +449,7 @@
   (let [[profile-path step & rest] args
         {:keys [url consent authorized-by]} (flags rest)]
     (when-not (and profile-path step)
-      (die "usage: nbb -m prolific.browser <profile.edn> <step-id> [--url U] [--consent GATE --authorized-by WHO]"))
+      (die "usage: kbb --backend sci -m prolific.browser <profile.edn> <step-id> [--url U] [--consent GATE --authorized-by WHO]"))
     (let [pick (channel/choose (probe))]
       (when-not (:channel pick)
         (die (channel/explain pick)))
