@@ -33,12 +33,12 @@ owns that identity.
 ## Layout
 
 ```
-src/prolific/core.cljc      pure: rewards, filters, study payload, triage
-src/prolific/evidence.cljc  pure: did the write actually land?
-src/prolific/channel.cljc   pure: which automation channel may be used at all
-src/prolific/signup.cljc    pure: the researcher signup as steps and fields
-src/prolific/client.cljs    HTTP: fetch/post against api.prolific.com
-src/prolific/browser.cljs   CDP: drive a form through agent-browser
+src/prolific/core.cljk      pure: rewards, filters, study payload, triage
+src/prolific/evidence.cljk  pure: did the write actually land?
+src/prolific/channel.cljk   pure: which automation channel may be used at all
+src/prolific/signup.cljk    pure: the researcher signup as steps and fields
+src/prolific/client.cljk    HTTP: fetch/post against api.prolific.com
+src/prolific/browser.cljk   CDP: drive a form through agent-browser
 ```
 
 The split is the point. Everything that decides **what a participant is paid**,
