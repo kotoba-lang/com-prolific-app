@@ -1,6 +1,6 @@
 (ns prolific.signup-test
   (:require [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is testing]]
+            [kotoba.test :refer [deftest is testing]]
             [prolific.signup :as s]))
 
 (def awai

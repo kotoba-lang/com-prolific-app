@@ -1,6 +1,6 @@
 (ns prolific.core-test
   (:require [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is testing]]
+            [kotoba.test :refer [deftest is testing]]
             [prolific.core :as core]))
 
 ;; A filter list shaped like a real GET /filters/ response: opaque numeric
