@@ -1,7 +1,7 @@
 (ns prolific.evidence-test
   "Every case here is a failure that actually happened on 2026-07-30 while
   driving the Prolific signup form. The strings are the real ones."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [prolific.evidence :as ev]))
 
 (deftest a-clean-write-is-a-match
