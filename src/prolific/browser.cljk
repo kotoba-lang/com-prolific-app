@@ -37,7 +37,7 @@
   nbb / Node only. The decisions live in the pure namespaces."
   (:require ["node:child_process" :as cp]
             ["node:fs" :as fs]
-            [clojure.edn :as edn]
+            [kotoba.lang.edn :as edn]
             [kotoba.lang.text :as str]
             [prolific.channel :as channel]
             [prolific.evidence :as ev]
